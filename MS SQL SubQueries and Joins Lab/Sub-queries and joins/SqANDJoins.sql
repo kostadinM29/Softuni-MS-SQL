@@ -5,7 +5,7 @@
 -- Hint: Use three-way join
 
 SELECT TOP 50 [FirstName], [LastName], t.[Name] AS [Town], a.[AddressText] FROM Employees AS e
-	JOIN Addresses AS a ON  a.AddressID = e.AddressID
+	JOIN Addresses AS a ON  e.AddressID = a.AddressID
 	JOIN Towns as t ON t.TownID = a.AddressID
 		ORDER BY [FirstName],[LastName]
 
