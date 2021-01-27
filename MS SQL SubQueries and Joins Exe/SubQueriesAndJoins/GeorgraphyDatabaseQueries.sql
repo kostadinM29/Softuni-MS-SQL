@@ -122,7 +122,7 @@ SELECT TOP 5
 	CASE
 			WHEN [MountainRange] IS NULL THEN '(no mountain)' 
 			ELSE [MountainRange]
-		END AS [Mountain]
+	END AS [Mountain]
 FROM 
 (
 	SELECT *,	
