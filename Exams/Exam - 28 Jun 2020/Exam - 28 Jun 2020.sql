@@ -184,7 +184,7 @@ BEGIN TRY
 
 	DECLARE @CurrentPurpose VARCHAR(20) = (SELECT j.Purpose FROM Journeys AS j WHERE j.Id = @journeyId)
 
-	IF (@CurrentPurpose != @NewPurpose)
+	IF (@CurrentPurpose = @NewPurpose)
 	BEGIN
 			ROLLBACK
 			RAISERROR('You cannot change the purpose!', 16,1)
