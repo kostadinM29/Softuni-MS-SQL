@@ -166,37 +166,56 @@ GO
 
 --12.	Change Journey Purpose
 
-SELECT * FROM Journeys
-
 GO
 CREATE PROC usp_ChangeJourneyPurpose(@JourneyId INT, @NewPurpose VARCHAR(20))
 AS
 BEGIN
-BEGIN TRANSACTION
-BEGIN TRY
+
 	IF (NOT EXISTS(SELECT j.Purpose FROM Journeys AS j WHERE j.Id = @journeyId)
 		)
-	BEGIN
-			ROLLBACK
-			RAISERROR('The journey does not exist!', 16, 1)
-			RETURN
-	END
+		THROW 50001, 'The journey does not exist!', 1
 
 	DECLARE @CurrentPurpose VARCHAR(20) = (SELECT j.Purpose FROM Journeys AS j WHERE j.Id = @journeyId)
 
-	IF (@NewPurpose = @NewPurpose)
-	BEGIN
-			ROLLBACK
-			RAISERROR('You cannot change the purpose!', 16,1)
-			RETURN
-	END
-	COMMIT
-END TRY
-BEGIN CATCH
-	SELECT ERROR_MESSAGE() AS [Error Message] 
-END CATCH
+	IF (@CurrentPurpose = @NewPurpose)
+		THROW 50002, 'You cannot change the purpose!', 1
+
 	UPDATE Journeys
 		SET Purpose = @NewPurpose
 		WHERE Id = @JourneyId
 END
 GO
+
+-- Old solution
+--GO
+--CREATE PROC usp_ChangeJourneyPurpose2(@JourneyId INT, @NewPurpose VARCHAR(20))
+--AS
+--BEGIN
+--BEGIN TRANSACTION
+--BEGIN TRY
+--	IF (NOT EXISTS(SELECT j.Purpose FROM Journeys AS j WHERE j.Id = @journeyId)
+--		)
+--	BEGIN
+--			ROLLBACK
+--			RAISERROR('The journey does not exist!', 16, 1)
+--			RETURN
+--	END
+
+--	DECLARE @CurrentPurpose VARCHAR(20) = (SELECT j.Purpose FROM Journeys AS j WHERE j.Id = @journeyId)
+
+--	IF (@CurrentPurpose = @NewPurpose)
+--	BEGIN
+--			ROLLBACK
+--			RAISERROR('You cannot change the purpose!', 16,1)
+--			RETURN
+--	END
+--	COMMIT
+--END TRY
+--BEGIN CATCH
+--	SELECT ERROR_MESSAGE() AS [Error Message] 
+--END CATCH
+--	UPDATE Journeys
+--		SET Purpose = @NewPurpose
+--		WHERE Id = @JourneyId
+--END
+--GO
