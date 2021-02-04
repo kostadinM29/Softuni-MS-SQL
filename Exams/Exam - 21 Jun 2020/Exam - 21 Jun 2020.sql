@@ -280,10 +280,11 @@ AS
 BEGIN
 	-- CHECK 
 
-	DECLARE @CurrentRoomId INT = (	SELECT TOP 1 r.HotelId FROM Trips t
-									JOIN Rooms r ON t.RoomId = r.Id
-									JOIN Hotels h ON r.HotelId = h.Id
-									WHERE t.Id = 10) 
+	DECLARE @CurrentRoomId INT = (
+		SELECT TOP 1 r.HotelId FROM Trips t
+		JOIN Rooms r ON t.RoomId = r.Id
+		JOIN Hotels h ON r.HotelId = h.Id
+		WHERE t.Id = 10) 
 	DECLARE @RequestedHotelId INT = (SELECT HotelId FROM Rooms WHERE Id = @TargetRoomId)
 
 	DECLARE @RequestedHotelBeds INT = (SELECT Beds FROM Rooms WHERE Id = @TargetRoomId)
@@ -292,7 +293,7 @@ BEGIN
 
 	IF @RequestedHotelId != @CurrentRoomId
 	BEGIN
-        ;THROW 50001, 'Target room is in another hotel!', 1
+		;THROW 50001, 'Target room is in another hotel!', 1
 	END  
 
 	ELSE IF @RequestedHotelBeds < @TripAccounts      
