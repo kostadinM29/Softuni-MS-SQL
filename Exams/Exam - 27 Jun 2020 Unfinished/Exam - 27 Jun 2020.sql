@@ -187,17 +187,15 @@ SELECT Available FROM  -- Judge doesn't like STRING_AGG
 WHERE String NOT LIKE '%In Progress%'
 ORDER BY S.MechanicId ASC
 
-SELECT mm.Available FROM 
-(
-	SELECT
-		j.MechanicId,
+
+	SELECT ---- Stupid way 
 		CONCAT(FirstName, ' ',LastName) AS Available
 	FROM Mechanics	m
 		LEFT JOIN Jobs j ON m.MechanicId = j.MechanicId
-		WHERE j.Status = 'Finished'
-		GROpUP BY m.FirstName, m.LastName, j.MechanicId
-) as mm
-ORDER BY mm.MechanicId
+		WHERE j.JobId IS NULL OR (SELECT COUNT(JobId) FROM Jobs 
+											WHERE Status <> 'Finished' AND MechanicId = j.MechanicId
+											GROUP BY MechanicId,Status) IS NULL
+	GROUP BY m.MechanicId , FirstName,LastName
 
 -- ************************************************************************* unfinished work to be done
 
@@ -230,15 +228,31 @@ SELECT * FROM
 		JOIN PartsNeeded pn ON j.JobId = pn.JobId
 		JOIN Parts p ON pn.PartId = p.PartId
 		JOIN OrderParts op ON p.PartId = op.PartId
-		JOIN Orders o ON op.OrderId= o.OrderId
+		LEFT JOIN Orders o ON op.OrderId= o.OrderId
 		WHERE 
-			j.Status != 'Finished'
+			j.Status <> 'Finished'
 			AND o.Delivered = 0
 			AND pn.Quantity > (p.StockQty + op.Quantity)
-		ORDER BY p.PartId ASC
 		
 ) i
 WHERE i.[Required] > (i.Ordered + i.[In Stock])
 ORDER BY i.Id ASC
+
+SELECT 
+		p.PartId AS Id,
+		p.[Description],
+		pn.Quantity AS [Required],
+		p.StockQty AS [In Stock],
+		IIF(o.Delivered = 0,op.Quantity, 0) AS [Ordered]
+FROM Parts p
+	LEFT JOIN PartsNeeded pn ON pn.PartId = p.PartId
+	LEFT JOIN OrderParts op ON p.PartId = op.PartId
+	LEFT JOIN Jobs j ON pn.JobId = j.JobId
+	LEFT JOIN Orders o ON j.JobId = o.JobId
+	WHERE j.Status != 'Finished' 
+		AND p.StockQty + IIF(o.Delivered = 0,op.Quantity, 0) < pn.Quantity 
+	ORDER BY p.PartId ASC
+		
+
 
 -- Im scrapping the prep exam for now. Need to solve 8,9,10
