@@ -114,6 +114,7 @@ INSERT INTO Parts(SerialNumber, Description, Price, VendorId) VALUES
 
 -- ID 3
 
+
 UPDATE Jobs
 	SET MechanicId = 3, Status = 'In Progress'
 	WHERE Status = 'Pending'
@@ -197,11 +198,10 @@ ORDER BY S.MechanicId ASC
 											GROUP BY MechanicId,Status) IS NULL
 	GROUP BY m.MechanicId , FirstName,LastName
 
--- ************************************************************************* unfinished work to be done
 
 --9.	Past Expenses
 
-SELECT  -- Yet again judge strikes back with the error (Invalid object name 'PartsNeeded'.)
+SELECT  -- Yet again judge strikes back with the error (Invalid object name 'PartsNeeded'.) -- After looking into I shouldn't use partsneeded anyway this is why.
 	j.JobId,
 	SUM(p.Price) AS Total
 FROM Jobs j
@@ -213,7 +213,41 @@ FROM Jobs j
 		Total DESC,
 		j.JobId ASC
 
--- ************************************************************************* unfinished work to be done
+SELECT 
+	o.JobId, 
+	SUM(op.Quantity*p.Price) AS [Total] 
+FROM Jobs j
+	JOIN Orders o ON j.JobId = o.JobId
+	JOIN OrderParts op ON o.OrderId = op.OrderId
+	JOIN Parts p ON op.PartId = p.PartId
+	WHERE j.Status = 'Finished'
+GROUP BY o.JobId
+ORDER BY 
+	[Total] DESC, 
+	o.JobId ASC
+------------------------------------------------
+
+SELECT -- working 
+	j.JobId,
+	IIF(Delivered IS NULL,0.00,SUM(p.Price * op.Quantity)) AS [Total]
+	--CASE
+	--	WHEN o.Delivered = 1 THEN SUM(p.Price * op.Quantity)
+	--	WHEN o.Delivered = 0 THEN SUM(p.Price * op.Quantity)
+	--	WHEN o.Delivered IS NULL THEN 0.00
+	--	END AS [Total]
+FROM Jobs j
+	LEFT JOIN Orders o ON j.JobId = o.JobId
+	LEFT JOIN OrderParts op ON o.OrderId = op.OrderId
+	LEFT JOIN Parts p ON op.PartId = p.PartId
+	WHERE j.Status = 'Finished'
+	GROUP BY j.JobId,o.Delivered
+	ORDER BY 
+	[Total] DESC, 
+	j.JobId ASC
+
+-- IT IS OVER
+
+
 
 -- 10.	Missing Parts
 SELECT * FROM
@@ -255,4 +289,59 @@ FROM Parts p
 		
 
 
--- Im scrapping the prep exam for now. Need to solve 8,9,10
+-- Section 4. Programmability
+
+--11.	Place Order
+
+GO
+CREATE PROC usp_PlaceOrder
+(
+	@JobId INT,
+	@SerialNumber VARCHAR(50),
+	@Quantity INT
+)
+AS
+DECLARE @Status VARCHAR(20) = (SELECT Status FROM Jobs WHERE JobId = @JobId)
+
+DECLARE @PartId VARCHAR(20) = (Select PartId FROM Parts WHERE SerialNumber = @SerialNumber)
+
+IF(@Status = 'Finished')
+	THROW 50011, 'This job is not active!', 1
+ELSE IF(@Quantity <= 0)
+	THROW 50012, 'Part quantity must be more than zero!', 1
+ELSE IF(@Status IS NULL)
+	THROW 50013, 'Job not found!',1 
+ELSE IF(@PartId IS NULL)
+	THROW 50014, 'Part not found!', 1
+
+DECLARE @OrderId INT = (SELECT TOP(1)o.OrderId FROM Orders o
+							JOIN OrderParts op ON o.OrderId = op.OrderId
+							JOIN Parts p ON op.PartId = p.PartId
+							WHERE JobId = @JobId AND p.PartId = @PartId)
+
+IF(@OrderId IS NULL)
+	BEGIN
+		INSERT INTO Orders(JobId,IssueDate) VALUES
+		(@JobId, NULL)
+
+		SET @OrderId = (SELECT OrderId FROM Orders WHERE @JobId = JobId AND IssueDate IS NULL)
+
+		INSERT INTO OrderParts(OrderId,PartId,Quantity) VALUES
+		(@OrderId, @PartId,@Quantity)
+	END
+ELSE
+	BEGIN
+		DECLARE @IssueDate DATE = (SELECT IssueDate FROM Orders WHERE OrderId = @OrderId and JobId = @JobId)
+
+		IF(@IssueDate IS NULL)
+			BEGIN
+				INSERT INTO OrderParts(OrderId,PartId,Quantity) VALUES
+				(@OrderId, @PartId,@Quantity)
+			END
+
+		ELSE
+			UPDATE OrderParts
+			SET Quantity += @Quantity
+			WHERE OrderId = @OrderId
+	END
+GO
