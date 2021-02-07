@@ -213,7 +213,7 @@ FROM Jobs j
 		Total DESC,
 		j.JobId ASC
 
-SELECT 
+SELECT  -- working
 	o.JobId, 
 	SUM(op.Quantity*p.Price) AS [Total] 
 FROM Jobs j
@@ -272,7 +272,7 @@ SELECT * FROM
 WHERE i.[Required] > (i.Ordered + i.[In Stock])
 ORDER BY i.Id ASC
 
-SELECT 
+SELECT  -- working
 		p.PartId AS Id,
 		p.[Description],
 		pn.Quantity AS [Required],
@@ -301,25 +301,52 @@ CREATE PROC usp_PlaceOrder
 	@Quantity INT
 )
 AS
+BEGIN TRANSACTION
 DECLARE @Status VARCHAR(20) = (SELECT Status FROM Jobs WHERE JobId = @JobId)
 
 DECLARE @PartId VARCHAR(20) = (Select PartId FROM Parts WHERE SerialNumber = @SerialNumber)
 
 IF(@Status = 'Finished')
-	THROW 50011, 'This job is not active!', 1
+	BEGIN
+		ROLLBACK;
+		THROW 50011, 'This job is not active!', 1
+	END
 ELSE IF(@Quantity <= 0)
-	THROW 50012, 'Part quantity must be more than zero!', 1
+	BEGIN
+		ROLLBACK;
+		THROW 50012, 'Part quantity must be more than zero!', 1
+	END
 ELSE IF(@Status IS NULL)
-	THROW 50013, 'Job not found!',1 
+	BEGIN
+		ROLLBACK;
+		THROW 50013, 'Job not found!',1 
+	END
 ELSE IF(@PartId IS NULL)
-	THROW 50014, 'Part not found!', 1
+	BEGIN
+		ROLLBACK;
+		THROW 50014, 'Part not found!', 1
+	END
 
-DECLARE @OrderId INT = (SELECT TOP(1)o.OrderId FROM Orders o
-							JOIN OrderParts op ON o.OrderId = op.OrderId
-							JOIN Parts p ON op.PartId = p.PartId
-							WHERE JobId = @JobId AND p.PartId = @PartId)
+DECLARE @OrderId INT	
 
-IF(@OrderId IS NULL)
+IF EXISTS(SELECT TOP(1)OrderId FROM Orders WHERE JobId = @JobId AND IssueDate IS NULL)  -- if order already exists
+	BEGIN
+		SET @OrderId = (SELECT TOP(1)o.OrderId FROM Orders o
+							WHERE JobId = @JobId AND IssueDate IS NULL)
+
+		IF NOT EXISTS(SELECT PartId FROM OrderParts WHERE OrderId = @OrderId AND PartId = @PartId) -- if part not already in order
+			BEGIN
+				INSERT INTO OrderParts(OrderId,PartId,Quantity) VALUES
+				(@OrderId, @PartId,@Quantity)
+			END
+		ELSE -- if part is already in order
+			BEGIN
+				UPDATE OrderParts
+				SET Quantity += @Quantity
+				WHERE OrderId = @OrderId AND PartId = @PartId
+			END
+	END
+ELSE  -- order does not exist
 	BEGIN
 		INSERT INTO Orders(JobId,IssueDate) VALUES
 		(@JobId, NULL)
@@ -329,19 +356,31 @@ IF(@OrderId IS NULL)
 		INSERT INTO OrderParts(OrderId,PartId,Quantity) VALUES
 		(@OrderId, @PartId,@Quantity)
 	END
-ELSE
-	BEGIN
-		DECLARE @IssueDate DATE = (SELECT IssueDate FROM Orders WHERE OrderId = @OrderId and JobId = @JobId)
+COMMIT
+GO
 
-		IF(@IssueDate IS NULL)
-			BEGIN
-				INSERT INTO OrderParts(OrderId,PartId,Quantity) VALUES
-				(@OrderId, @PartId,@Quantity)
-			END
+--12.	Cost Of Order 
 
-		ELSE
-			UPDATE OrderParts
-			SET Quantity += @Quantity
-			WHERE OrderId = @OrderId
-	END
+GO
+CREATE FUNCTION udf_GetCost(@JobId INT)
+RETURNS DECIMAL(18,2)
+AS
+BEGIN
+	DECLARE @Result DECIMAL(18,2)
+	SET @Result =
+	(
+		SELECT 
+			SUM(p.Price * op.Quantity)
+		FROM Jobs j
+			JOIN Orders o ON j.JobId = o.JobId
+			JOIN OrderParts op ON o.OrderId = op.OrderId
+			JOIN Parts p ON op.PartId = p.PartId
+			WHERE j.JobId = @JobId
+
+	)
+	IF (@Result IS NULL)
+		SET @Result = 0
+
+	RETURN @Result
+END
 GO
